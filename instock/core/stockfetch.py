@@ -9,6 +9,7 @@ import pandas as pd
 import talib as tl
 import instock.core.tablestructure as tbs
 import instock.lib.trade_time as trd
+import instock.lib.data_source_config as dsc
 import instock.core.crawling.trade_date_hist as tdh
 import instock.core.crawling.fund_etf_em as fee
 import instock.core.crawling.stock_selection as sst
@@ -20,6 +21,7 @@ import instock.core.crawling.stock_fund_em as sff
 import instock.core.crawling.stock_fhps_em as sfe
 import instock.core.crawling.stock_chip_race as scr
 import instock.core.crawling.stock_limitup_reason as slr
+import instock.core.crawling.stock_akshare as sak
 
 __author__ = 'myh '
 __date__ = '2023/3/10 '
@@ -75,9 +77,33 @@ def fetch_stocks_trade_date():
 # 读取当天股票数据
 def fetch_etfs(date):
     try:
-        data = fee.fund_etf_spot_em()
+        data = None
+        # 优先使用默认数据源
+        if dsc.DEFAULT_DATA_SOURCE == dsc.DATA_SOURCE_EASTMONEY:
+            data = fee.fund_etf_spot_em()
+        elif dsc.DEFAULT_DATA_SOURCE == dsc.DATA_SOURCE_AKSHARE:
+            data = sak.fund_etf_spot_em_akshare()
+        
+        # 如果启用自动切换且主数据源失败，尝试备用数据源
+        if dsc.ENABLE_AUTO_FALLBACK and (data is None or len(data.index) == 0):
+            logging.warning(f"主数据源 {dsc.DEFAULT_DATA_SOURCE} 获取ETF数据失败，尝试备用数据源")
+            for fallback_source in dsc.FALLBACK_ORDER:
+                if fallback_source == dsc.DEFAULT_DATA_SOURCE:
+                    continue
+                
+                logging.info(f"尝试备用数据源: {fallback_source}")
+                if fallback_source == dsc.DATA_SOURCE_EASTMONEY:
+                    data = fee.fund_etf_spot_em()
+                elif fallback_source == dsc.DATA_SOURCE_AKSHARE:
+                    data = sak.fund_etf_spot_em_akshare()
+                
+                if data is not None and len(data.index) > 0:
+                    logging.info(f"成功使用备用数据源 {fallback_source} 获取ETF数据")
+                    break
+        
         if data is None or len(data.index) == 0:
             return None
+        
         if date is None:
             data.insert(0, 'date', datetime.datetime.now().strftime("%Y-%m-%d"))
         else:
@@ -93,9 +119,33 @@ def fetch_etfs(date):
 # 读取当天股票数据
 def fetch_stocks(date):
     try:
-        data = she.stock_zh_a_spot_em()
+        data = None
+        # 优先使用默认数据源
+        if dsc.DEFAULT_DATA_SOURCE == dsc.DATA_SOURCE_EASTMONEY:
+            data = she.stock_zh_a_spot_em()
+        elif dsc.DEFAULT_DATA_SOURCE == dsc.DATA_SOURCE_AKSHARE:
+            data = sak.stock_zh_a_spot_em_akshare()
+        
+        # 如果启用自动切换且主数据源失败，尝试备用数据源
+        if dsc.ENABLE_AUTO_FALLBACK and (data is None or len(data.index) == 0):
+            logging.warning(f"主数据源 {dsc.DEFAULT_DATA_SOURCE} 获取数据失败，尝试备用数据源")
+            for fallback_source in dsc.FALLBACK_ORDER:
+                if fallback_source == dsc.DEFAULT_DATA_SOURCE:
+                    continue  # 跳过已尝试的主数据源
+                
+                logging.info(f"尝试备用数据源: {fallback_source}")
+                if fallback_source == dsc.DATA_SOURCE_EASTMONEY:
+                    data = she.stock_zh_a_spot_em()
+                elif fallback_source == dsc.DATA_SOURCE_AKSHARE:
+                    data = sak.stock_zh_a_spot_em_akshare()
+                
+                if data is not None and len(data.index) > 0:
+                    logging.info(f"成功使用备用数据源 {fallback_source} 获取数据")
+                    break
+        
         if data is None or len(data.index) == 0:
             return None
+        
         if date is None:
             data.insert(0, 'date', datetime.datetime.now().strftime("%Y-%m-%d"))
         else:
@@ -301,11 +351,46 @@ def fetch_etf_hist(data_base, date_start=None, date_end=None, adjust='qfq'):
     if date_start is None:
         date_start, is_cache = trd.get_trade_hist_interval(date)  # 提高运行效率，只运行一次
     try:
-        if date_end is not None:
-            data = fee.fund_etf_hist_em(symbol=code, period="daily", start_date=date_start, end_date=date_end,
-                                        adjust=adjust)
-        else:
-            data = fee.fund_etf_hist_em(symbol=code, period="daily", start_date=date_start, adjust=adjust)
+        data = None
+        # 优先使用默认数据源
+        if dsc.DEFAULT_DATA_SOURCE == dsc.DATA_SOURCE_EASTMONEY:
+            if date_end is not None:
+                data = fee.fund_etf_hist_em(symbol=code, period="daily", start_date=date_start, end_date=date_end,
+                                            adjust=adjust)
+            else:
+                data = fee.fund_etf_hist_em(symbol=code, period="daily", start_date=date_start, adjust=adjust)
+        elif dsc.DEFAULT_DATA_SOURCE == dsc.DATA_SOURCE_AKSHARE:
+            if date_end is not None:
+                data = sak.fund_etf_hist_em_akshare(symbol=code, period="daily", start_date=date_start, 
+                                                    end_date=date_end, adjust=adjust)
+            else:
+                data = sak.fund_etf_hist_em_akshare(symbol=code, period="daily", start_date=date_start, adjust=adjust)
+        
+        # 如果启用自动切换且主数据源失败，尝试备用数据源
+        if dsc.ENABLE_AUTO_FALLBACK and (data is None or len(data.index) == 0):
+            logging.warning(f"主数据源 {dsc.DEFAULT_DATA_SOURCE} 获取ETF {code} 历史数据失败，尝试备用数据源")
+            for fallback_source in dsc.FALLBACK_ORDER:
+                if fallback_source == dsc.DEFAULT_DATA_SOURCE:
+                    continue
+                
+                logging.info(f"尝试备用数据源: {fallback_source}")
+                if fallback_source == dsc.DATA_SOURCE_EASTMONEY:
+                    if date_end is not None:
+                        data = fee.fund_etf_hist_em(symbol=code, period="daily", start_date=date_start, 
+                                                   end_date=date_end, adjust=adjust)
+                    else:
+                        data = fee.fund_etf_hist_em(symbol=code, period="daily", start_date=date_start, adjust=adjust)
+                elif fallback_source == dsc.DATA_SOURCE_AKSHARE:
+                    if date_end is not None:
+                        data = sak.fund_etf_hist_em_akshare(symbol=code, period="daily", start_date=date_start, 
+                                                           end_date=date_end, adjust=adjust)
+                    else:
+                        data = sak.fund_etf_hist_em_akshare(symbol=code, period="daily", start_date=date_start, 
+                                                           adjust=adjust)
+                
+                if data is not None and len(data.index) > 0:
+                    logging.info(f"成功使用备用数据源 {fallback_source} 获取ETF {code} 历史数据")
+                    break
 
         if data is None or len(data.index) == 0:
             return None
@@ -356,11 +441,46 @@ def stock_hist_cache(code, date_start, date_end=None, is_cache=True, adjust=''):
         if os.path.isfile(cache_file):
             return pd.read_pickle(cache_file, compression="gzip")
         else:
-            if date_end is not None:
-                stock = she.stock_zh_a_hist(symbol=code, period="daily", start_date=date_start, end_date=date_end,
-                                            adjust=adjust)
-            else:
-                stock = she.stock_zh_a_hist(symbol=code, period="daily", start_date=date_start, adjust=adjust)
+            stock = None
+            # 优先使用默认数据源
+            if dsc.DEFAULT_DATA_SOURCE == dsc.DATA_SOURCE_EASTMONEY:
+                if date_end is not None:
+                    stock = she.stock_zh_a_hist(symbol=code, period="daily", start_date=date_start, end_date=date_end,
+                                                adjust=adjust)
+                else:
+                    stock = she.stock_zh_a_hist(symbol=code, period="daily", start_date=date_start, adjust=adjust)
+            elif dsc.DEFAULT_DATA_SOURCE == dsc.DATA_SOURCE_AKSHARE:
+                if date_end is not None:
+                    stock = sak.stock_zh_a_hist_akshare(symbol=code, period="daily", start_date=date_start, 
+                                                        end_date=date_end, adjust=adjust)
+                else:
+                    stock = sak.stock_zh_a_hist_akshare(symbol=code, period="daily", start_date=date_start, adjust=adjust)
+            
+            # 如果启用自动切换且主数据源失败，尝试备用数据源
+            if dsc.ENABLE_AUTO_FALLBACK and (stock is None or len(stock.index) == 0):
+                logging.warning(f"主数据源 {dsc.DEFAULT_DATA_SOURCE} 获取 {code} 历史数据失败，尝试备用数据源")
+                for fallback_source in dsc.FALLBACK_ORDER:
+                    if fallback_source == dsc.DEFAULT_DATA_SOURCE:
+                        continue
+                    
+                    logging.info(f"尝试备用数据源: {fallback_source}")
+                    if fallback_source == dsc.DATA_SOURCE_EASTMONEY:
+                        if date_end is not None:
+                            stock = she.stock_zh_a_hist(symbol=code, period="daily", start_date=date_start, 
+                                                       end_date=date_end, adjust=adjust)
+                        else:
+                            stock = she.stock_zh_a_hist(symbol=code, period="daily", start_date=date_start, adjust=adjust)
+                    elif fallback_source == dsc.DATA_SOURCE_AKSHARE:
+                        if date_end is not None:
+                            stock = sak.stock_zh_a_hist_akshare(symbol=code, period="daily", start_date=date_start, 
+                                                               end_date=date_end, adjust=adjust)
+                        else:
+                            stock = sak.stock_zh_a_hist_akshare(symbol=code, period="daily", start_date=date_start, 
+                                                               adjust=adjust)
+                    
+                    if stock is not None and len(stock.index) > 0:
+                        logging.info(f"成功使用备用数据源 {fallback_source} 获取 {code} 历史数据")
+                        break
 
             if stock is None or len(stock.index) == 0:
                 return None

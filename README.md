@@ -6,6 +6,20 @@ The stock system,Capture key data on daily stocks and ETFs, calculate stock tech
 
 Docker镜像：https://hub.docker.com/r/mayanghua/instock **镜像优化构建仅170M**。
 
+## 数据源支持
+
+本系统已集成多数据源支持，提供更加稳定可靠的数据获取能力：
+
+- **东方财富（EastMoney）**：默认数据源，功能完善
+- **AKShare**：备用数据源，开源免费的Python财经数据接口库
+
+**特性：**
+- 支持数据源自由切换
+- 自动容错切换机制，确保数据获取的稳定性
+- 配置简单，无需修改业务代码
+
+详细说明请参考：[AKShare集成文档](instock/core/crawling/AKSHARE_README.md)
+
 # 功能介绍
 
 ##  一：综合选股
